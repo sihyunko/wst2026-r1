@@ -1,0 +1,436 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PhotoBooth</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        :root {
+            --pb-bg: #f8f8f6;
+            --pb-dark: #1a1917;
+            --pb-accent: #c0392b;
+        }
+
+        body { background: var(--pb-bg); font-family: 'Segoe UI', sans-serif; }
+
+        /* 화면 전환 */
+        .screen { display: none; min-height: 100vh; flex-direction: column; }
+        .screen.active { display: flex; }
+
+        /* 공통 헤더 */
+        .pb-header {
+            background: var(--pb-dark); color: #fff;
+            padding: 12px 24px;
+            display: flex; align-items: center; justify-content: space-between;
+            flex-shrink: 0;
+        }
+        .pb-logo { font-size: 1.1rem; font-weight: 600; letter-spacing: 1px; }
+        .lang-toggle .btn { padding: 2px 10px; font-size: 12px; border-color: #fff; color: #fff; }
+        .lang-toggle .btn.active { background: #fff; color: var(--pb-dark); }
+
+        /* 공통 푸터 */
+        .pb-footer {
+            background: #fff; border-top: 1px solid #dee2e6;
+            padding: 14px 24px;
+            display: flex; justify-content: flex-end; gap: 10px;
+            flex-shrink: 0;
+        }
+
+        /* 1. 시작 화면 */
+        #screen-start { align-items: center; justify-content: center; text-align: center; cursor: pointer; gap: 20px; }
+        .start-lang-wrap { z-index: 10; }
+        .start-lang-wrap .lang-toggle .btn { border-color: var(--pb-dark); color: var(--pb-dark); }
+        .start-lang-wrap .lang-toggle .btn.active { background: var(--pb-dark); color: #fff; }
+        .start-subtitle { font-size: .75rem; letter-spacing: 4px; }
+        .start-title { font-size: 3rem; font-weight: 700; letter-spacing: 2px; color: var(--pb-dark); }
+        .start-divider { width: 32px; height: 1px; background: #adb5bd; }
+        .start-preview {
+            display: grid; grid-template-columns: 1fr 1fr; gap: 4px;
+            width: 120px; margin: 0 auto;
+            background: #fff; padding: 8px 8px 20px;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.08);
+        }
+        .start-preview-cell { aspect-ratio: 3/4; background: #dee2e6; }
+        @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
+        .start-hint { font-size: 0.75rem; letter-spacing: 3px; color: #adb5bd; text-transform: uppercase; animation: blink 1.2s ease-in-out infinite; }
+
+        /* 2. 프레임 선택 */
+        .frame-grid { max-width: 800px; width: 100%; }
+        .frame-card {
+            border: 2px solid #dee2e6; border-radius: 8px;
+            padding: 20px 12px; text-align: center; cursor: pointer;
+            transition: border-color .15s;
+        }
+        .frame-card:hover { border-color: #6c757d; }
+        .frame-card.selected { border-color: var(--pb-dark); background: #fff; }
+        .frame-card img { width: 120px; height: 120px; object-fit: contain; }
+        .frame-desc { font-size: .75rem; }
+        .frame-tag-1 { background: #ede9f8; color: #6f42c1; }
+        .frame-tag-2 { background: #e0f4f4; color: #0d9488; }
+        .frame-tag-3 { background: #e4f5eb; color: #198754; }
+
+        /* 3. 촬영 화면 */
+        .camera-label { font-size: .7rem; letter-spacing: 3px; }
+        .camera-ready { font-size: .8rem; letter-spacing: 2px; }
+        .camera-view {
+            background: #212529; aspect-ratio: 4/3;
+            display: flex; align-items: center; justify-content: center;
+            position: relative; max-width: 480px; width: 100%;
+        }
+        .flash-overlay { position: fixed; inset: 0; background: #fff; opacity: 0; pointer-events: none; z-index: 9999; }
+        .countdown-num { font-size: 5rem; font-weight: 700; color: var(--pb-dark); line-height: 1; }
+        .shutter-btn {
+            width: 64px; height: 64px; border-radius: 50%;
+            background: var(--pb-dark); border: 3px solid var(--pb-bg); outline: 2px solid var(--pb-dark);
+        }
+        .shot-panel {
+            width: 280px; border-left: 1px solid #dee2e6;
+            padding: 20px 14px; display: flex; flex-direction: column;
+            gap: 10px; flex-shrink: 0;
+        }
+        .shot-slot {
+            aspect-ratio: 4/3; background: #e9ecef;
+            border: 1.5px dashed #adb5bd; border-radius: 4px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 12px; color: #adb5bd; overflow: hidden;
+        }
+        .shot-slot img { width: 100%; height: 100%; object-fit: cover; }
+        .shot-slot.taken { border-style: solid; border-color: var(--pb-dark); }
+
+        /* 편집 공통 */
+        .edit-sidebar {
+            width: 280px; flex-shrink: 0;
+            border-right: 1px solid #dee2e6;
+            padding: 20px 16px; overflow-y: auto;
+        }
+        .edit-main { flex: 1; display: flex; align-items: center; justify-content: center; padding: 24px; }
+        .section-title { font-size: 0.7rem; letter-spacing: 3px; text-transform: uppercase; color: #6c757d; margin-bottom: 10px; }
+
+        /* 4-1. 사진 배치 슬롯 */
+        .arrange-slot { height: 200px; overflow: hidden; cursor: pointer; border: 2px solid transparent; border-radius: 4px; }
+        .arrange-slot:hover { border-color: var(--pb-dark); }
+        .arrange-slot img { width: 100%; height: 100%; object-fit: contain; background: #f0f0f0; }
+
+        /* 4-2. 필터 */
+        .filter-item {
+            display: flex; align-items: center; gap: 10px;
+            padding: 8px 10px; border: 1px solid transparent; border-radius: 4px;
+            cursor: pointer; margin-bottom: 6px;
+        }
+        .filter-item:hover { background: #f8f9fa; }
+        .filter-item.selected { border-color: var(--pb-dark); background: #fff; }
+        .filter-thumb { width: 40px; height: 30px; border-radius: 2px; flex-shrink: 0; }
+        .filter-thumb-default { background: linear-gradient(135deg, #d8d6d0, #e8e6e0); }
+        .filter-thumb-bw { background: linear-gradient(135deg, #888, #ccc); }
+
+        /* 4-3. 스티커 */
+        .sticker-opt {
+            width: 100%; aspect-ratio: 1; object-fit: contain;
+            border: 2px solid transparent; border-radius: 4px;
+            cursor: pointer; padding: 4px; background: #fff;
+        }
+        .sticker-opt:hover { border-color: #adb5bd; }
+        .sticker-opt.selected { border-color: var(--pb-dark); }
+
+        /* 편집 canvas */
+        .preview-canvas { max-height: 750px; max-width: 100%; display: block; width: auto; height: auto; }
+        .arrange-slot.used { opacity: 0.35; cursor: default; }
+
+        /* 5. 결과 */
+        #resultCanvas { box-shadow: 0 4px 24px rgba(0,0,0,0.15); max-height: 480px; }
+        .result-actions { max-width: 240px; }
+        .complete-badge {
+            display: inline-flex; align-items: center; gap: 8px;
+            background: #d1e7dd; color: #0f5132;
+            padding: 6px 14px; border-radius: 100px; font-size: 0.8rem;
+        }
+        .badge-dot { width: 7px; height: 7px; background: #198754; border-radius: 50%; }
+    </style>
+</head>
+<body>
+
+
+<!-- ══ 1. 시작 화면 ══════════════════════════════════════ -->
+<div class="screen active" id="screen-start">
+
+    <div class="position-fixed top-0 end-0 p-3 start-lang-wrap">
+        <div class="lang-toggle d-flex gap-1">
+            <button class="btn btn-sm btn-outline-secondary active" data-lang="ko">KO</button>
+            <button class="btn btn-sm btn-outline-secondary" data-lang="en">EN</button>
+        </div>
+    </div>
+
+    <span class="text-muted start-subtitle">INSTANT MEMORY</span>
+    <h1 class="start-title">PhotoBooth</h1>
+    <div class="start-divider"></div>
+
+    <div class="start-preview">
+        <div class="start-preview-cell"></div>
+        <div class="start-preview-cell"></div>
+        <div class="start-preview-cell"></div>
+        <div class="start-preview-cell"></div>
+    </div>
+
+    <p class="text-muted" data-i18n="tagline">오늘의 순간을 네 컷에 담아보세요</p>
+    <p class="start-hint" data-i18n="touch">터치하여 시작</p>
+
+</div>
+
+
+<!-- ══ 2. 프레임 선택 화면 ══════════════════════════════ -->
+<div class="screen" id="screen-frame">
+
+    <div class="pb-header">
+        <div class="pb-logo">PhotoBooth</div>
+        <div class="d-flex align-items-center gap-3">
+            <span class="text-white-50 small">1 / 4</span>
+            <div class="lang-toggle d-flex gap-1">
+                <button class="btn btn-sm active" data-lang="ko">KO</button>
+                <button class="btn btn-sm" data-lang="en">EN</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="flex-grow-1 d-flex flex-column align-items-center justify-content-center p-4 gap-3">
+        <h4 class="fw-semibold" data-i18n="frame_title">프레임을 선택해주세요</h4>
+        <p class="text-muted" data-i18n="frame_sub">원하는 프레임을 선택하고 촬영을 시작해보세요!</p>
+
+        <div class="row g-3 frame-grid">
+            <div class="col-4">
+                <div class="frame-card" data-frame="1">
+                    <img src="media/frame_icon_01.png" alt="테스트 이미지" title="테스트 이미지">
+                    <div class="fw-semibold mt-2 small" data-i18n="frame1_name">세로 4컷</div>
+                    <div class="text-muted frame-desc" data-i18n="frame1_desc">클래식한 4컷 모드</div>
+                    <span class="badge mt-1 frame-tag-1" data-i18n="frame1_tag">4컷 세로형</span>
+                </div>
+            </div>
+            <div class="col-4">
+                <div class="frame-card" data-frame="2">
+                    <img src="media/frame_icon_02.png" alt="테스트 이미지" title="테스트 이미지">
+                    <div class="fw-semibold mt-2 small" data-i18n="frame2_name">가로 4컷</div>
+                    <div class="text-muted frame-desc" data-i18n="frame2_desc">와이드한 가로 모드</div>
+                    <span class="badge mt-1 frame-tag-2" data-i18n="frame2_tag">4컷 가로형</span>
+                </div>
+            </div>
+            <div class="col-4">
+                <div class="frame-card" data-frame="3">
+                    <img src="media/frame_icon_03.png" alt="테스트 이미지" title="테스트 이미지">
+                    <div class="fw-semibold mt-2 small" data-i18n="frame3_name">2x2컷</div>
+                    <div class="text-muted frame-desc" data-i18n="frame3_desc">여유로운 2x2 모드</div>
+                    <span class="badge mt-1 frame-tag-3" data-i18n="frame3_tag">2x2 세로형</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="pb-footer">
+        <button class="btn btn-dark px-4" id="btnFrameStart" disabled data-i18n="btn_start">시작하기</button>
+    </div>
+
+</div>
+
+
+<!-- ══ 3. 촬영 화면 ════════════════════════════════════ -->
+<div class="screen" id="screen-capture">
+
+    <div class="pb-header">
+        <div class="pb-logo">PhotoBooth</div>
+        <div class="d-flex align-items-center gap-3">
+            <span class="text-white-50 small">2 / 4</span>
+            <div class="lang-toggle d-flex gap-1">
+                <button class="btn btn-sm active" data-lang="ko">KO</button>
+                <button class="btn btn-sm" data-lang="en">EN</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="flex-grow-1 d-flex overflow-hidden">
+
+        <!-- 카메라 + 컨트롤 -->
+        <div class="flex-grow-1 d-flex flex-column align-items-center justify-content-center gap-3 p-4">
+            <span class="text-muted camera-label">CAMERA</span>
+            <div class="camera-view" id="cameraView">
+                <div class="flash-overlay" id="flashOverlay"></div>
+                <span class="text-muted camera-ready">READY</span>
+            </div>
+            <div class="countdown-num" id="countdownNum">5</div>
+            <div class="d-flex flex-column align-items-center gap-1">
+                <button class="shutter-btn" id="btnShutter"></button>
+                <span class="text-muted small" data-i18n="shoot_hint">촬영 / Shoot</span>
+            </div>
+        </div>
+
+        <!-- 슬롯 -->
+        <div class="shot-panel">
+            <div class="section-title">SHOTS</div>
+            <div class="d-flex flex-column gap-2 flex-grow-1" id="shotSlots">
+                <div class="shot-slot" data-slot="0"><span>1</span><img src="media/sample_vertical_01.png" alt="테스트 이미지" title="테스트 이미지"></div>
+                <div class="shot-slot" data-slot="1"><span>2</span><img src="media/sample_horizontal_01.png" alt="테스트 이미지" title="테스트 이미지"></div>
+                <div class="shot-slot" data-slot="2"><span>3</span><img src="media/sample_square_01.png" alt="테스트 이미지" title="테스트 이미지"></div>
+                <div class="shot-slot" data-slot="3"><span>4</span><img src="media/sample_square_01.png" alt="테스트 이미지" title="테스트 이미지"></div>
+            </div>
+            <div class="text-muted small">
+                <span id="shotCount">0</span> / 4 <span data-i18n="shot_done">완료</span>
+            </div>
+        </div>
+
+    </div>
+
+</div>
+
+
+<!-- ══ 4-1. 편집: 사진 배치 ═══════════════════════════ -->
+<div class="screen" id="screen-arrange">
+
+    <div class="pb-header">
+        <div class="pb-logo">PhotoBooth</div>
+        <div class="d-flex align-items-center gap-3">
+            <span class="text-white-50 small">3 / 4 — Step 1</span>
+            <div class="lang-toggle d-flex gap-1">
+                <button class="btn btn-sm active" data-lang="ko">KO</button>
+                <button class="btn btn-sm" data-lang="en">EN</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="flex-grow-1 d-flex overflow-hidden">
+        <div class="edit-sidebar">
+            <div class="section-title" data-i18n="step1_title">사진 배치</div>
+            <p class="text-muted small mb-3" data-i18n="step1_desc">슬롯을 클릭해 프레임에 배치하세요</p>
+            <div class="d-flex flex-column gap-2" id="arrangeSlots">
+                <div class="arrange-slot" data-idx="0"><img src="media/sample_vertical_01.png" alt="테스트 이미지" title="테스트 이미지"></div>
+                <div class="arrange-slot" data-idx="1"><img src="media/sample_square_01.png" alt="테스트 이미지" title="테스트 이미지"></div>
+                <div class="arrange-slot" data-idx="2"><img src="media/sample_horizontal_01.png" alt="테스트 이미지" title="테스트 이미지"></div>
+                <div class="arrange-slot" data-idx="3"><img src="media/sample_vertical_01.png" alt="테스트 이미지" title="테스트 이미지"></div>
+            </div>
+        </div>
+        <div class="edit-main" id="arrangePreview">
+        </div>
+    </div>
+
+    <div class="pb-footer">
+        <button class="btn btn-dark px-4" id="btnArrangeNext" disabled data-i18n="btn_next">다음 / Next</button>
+    </div>
+
+</div>
+
+
+<!-- ══ 4-2. 편집: 필터 ════════════════════════════════ -->
+<div class="screen" id="screen-filter">
+
+    <div class="pb-header">
+        <div class="pb-logo">PhotoBooth</div>
+        <div class="d-flex align-items-center gap-3">
+            <span class="text-white-50 small">3 / 4 — Step 2</span>
+            <div class="lang-toggle d-flex gap-1">
+                <button class="btn btn-sm active" data-lang="ko">KO</button>
+                <button class="btn btn-sm" data-lang="en">EN</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="flex-grow-1 d-flex overflow-hidden">
+        <div class="edit-sidebar">
+            <div class="section-title" data-i18n="step2_title">필터 적용</div>
+            <div class="filter-item selected" data-filter="none">
+                <div class="filter-thumb filter-thumb-default"></div>
+                <span data-i18n="filter_default">기본 / Default</span>
+            </div>
+            <div class="filter-item" data-filter="bw">
+                <div class="filter-thumb filter-thumb-bw"></div>
+                <span data-i18n="filter_bw">흑백 / B&W</span>
+            </div>
+        </div>
+        <div class="edit-main">
+            <canvas id="canvasFilter"></canvas>
+        </div>
+    </div>
+
+    <div class="pb-footer">
+        <button class="btn btn-dark px-4" id="btnFilterNext" data-i18n="btn_next">다음 / Next</button>
+    </div>
+
+</div>
+
+
+<!-- ══ 4-3. 편집: 스티커 ══════════════════════════════ -->
+<div class="screen" id="screen-sticker">
+
+    <div class="pb-header">
+        <div class="pb-logo">PhotoBooth</div>
+        <div class="d-flex align-items-center gap-3">
+            <span class="text-white-50 small">3 / 4 — Step 3</span>
+            <div class="lang-toggle d-flex gap-1">
+                <button class="btn btn-sm active" data-lang="ko">KO</button>
+                <button class="btn btn-sm" data-lang="en">EN</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="flex-grow-1 d-flex overflow-hidden">
+        <div class="edit-sidebar">
+            <div class="section-title" data-i18n="step3_title">스티커 적용</div>
+            <p class="text-muted small mb-2" data-i18n="step3_desc">스티커 선택 후 프레임을 클릭하세요</p>
+            <div class="row g-2 mb-3" id="stickerOptions">
+                <div class="col-6"><img src="media/sticker_01.png" class="sticker-opt" data-sticker="1" alt="테스트 이미지" title="테스트 이미지"></div>
+                <div class="col-6"><img src="media/sticker_02.png" class="sticker-opt" data-sticker="2" alt="테스트 이미지" title="테스트 이미지"></div>
+                <div class="col-6"><img src="media/sticker_03.png" class="sticker-opt" data-sticker="3" alt="테스트 이미지" title="테스트 이미지"></div>
+                <div class="col-6"><img src="media/sticker_04.png" class="sticker-opt" data-sticker="4" alt="테스트 이미지" title="테스트 이미지"></div>
+            </div>
+            <label class="form-label small" data-i18n="sticker_size">스티커 크기</label>
+            <input type="range" class="form-range mb-1" id="stickerSize" min="50" max="300" value="100">
+            <div class="text-muted small mb-3"><span id="stickerSizeVal">100</span>px</div>
+            <button class="btn btn-sm btn-outline-secondary w-100" id="btnDeleteSticker" data-i18n="delete_sticker">선택 스티커 삭제</button>
+        </div>
+        <div class="edit-main" id="framePreviewSticker">
+            <!-- JS에서 canvas + overlay 삽입 -->
+        </div>
+    </div>
+
+    <div class="pb-footer">
+        <button class="btn btn-dark px-4" id="btnStickerNext" data-i18n="btn_next">다음 / Next</button>
+    </div>
+
+</div>
+
+
+<!-- ══ 5. 결과 화면 ════════════════════════════════════ -->
+<div class="screen" id="screen-result">
+
+    <div class="pb-header">
+        <div class="pb-logo">PhotoBooth</div>
+        <div class="d-flex align-items-center gap-3">
+            <span class="text-white-50 small">4 / 4</span>
+            <div class="lang-toggle d-flex gap-1">
+                <button class="btn btn-sm active" data-lang="ko">KO</button>
+                <button class="btn btn-sm" data-lang="en">EN</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="flex-grow-1 d-flex align-items-center justify-content-center gap-5 p-4">
+
+        <div>
+            <canvas id="resultCanvas"></canvas>
+        </div>
+
+        <div class="d-flex flex-column gap-3 result-actions">
+            <div class="complete-badge">
+                <div class="badge-dot"></div>
+                <span data-i18n="complete">Complete</span>
+            </div>
+            <h4 class="fw-semibold" data-i18n="result_title">오늘의 네 컷이<br>완성됐어요</h4>
+            <button class="btn btn-dark" id="btnDownloadJpg" data-i18n="download_jpg">JPG 다운로드</button>
+            <button class="btn btn-outline-dark" id="btnDownloadPng" data-i18n="download_png">PNG 다운로드</button>
+            <button class="btn btn-link text-muted" id="btnHome" data-i18n="btn_home">홈으로</button>
+        </div>
+
+    </div>
+
+</div>
+
+
+    <script src="js/app.js"></script>
+</body>
+</html>
